@@ -1,4 +1,6 @@
 target/
+dist/
+/cron-utils
 .settings/
 .classpath
 .project

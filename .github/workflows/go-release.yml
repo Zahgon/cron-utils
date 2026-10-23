@@ -1,0 +1,46 @@
+# This workflow tests the module and attaches the cron-utils command line to a release when one is created
+
+name: publish
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'warning'
+      tags:
+        description: 'test, build and publish'
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+
+    - name: test
+      run: go test ./...
+
+    - name: build the command line
+      run: |
+        for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+          os=${target%/*}; arch=${target#*/}; ext=; [ "$os" = windows ] && ext=.exe
+          CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -o "dist/cron-utils-$os-$arch$ext" ./cmd/cron-utils
+        done
+
+    - name: attach to the release
+      if: github.event_name == 'release'
+      run: gh release upload "${{ github.event.release.tag_name }}" dist/*
+      env:
+        GH_TOKEN: ${{ github.token }}

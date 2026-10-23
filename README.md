@@ -2,31 +2,19 @@
 _We define crons. And support them._
 
 
-cron-utils is a Java library to define, parse, validate, migrate crons as well as get human readable descriptions for them. The project follows the [Semantic Versioning Convention](https://semver.org/), provides OSGi metadata and uses Apache 2.0 license.
+cron-utils is a Go library to define, parse, validate, migrate crons as well as get human readable descriptions for them. The project follows the [Semantic Versioning Convention](https://semver.org/), uses Apache 2.0 license.
 
 [![Gitter Chat](https://img.shields.io/badge/chat-online-brightgreen.svg)](https://gitter.im/jmrozanec/cron-utils)
-[![Build Status](https://travis-ci.org/jmrozanec/cron-utils.png?branch=master)](https://travis-ci.org/jmrozanec/cron-utils)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=cron-utils&metric=coverage)](https://sonarcloud.io/dashboard/index/cron-utils)
 
 
 **Download**
 
-cron-utils is available on [Maven central](https://search.maven.org/#search%7Cga%7C1%7Cg%3A%22com.cronutils%22) repository.
+cron-utils is a Go module with no dependencies outside the standard library (Go 1.25 or later):
 
-    <dependency>
-        <groupId>com.cronutils</groupId>
-        <artifactId>cron-utils</artifactId>
-        <version>9.2.1</version>
-    </dependency>
+    go get github.com/jmrozanec/cron-utils
 
-For Android developers, cron-utils 7.0.0 assumes Android 26+. For earlier Android versions consider using cron-utils 6.0.6.
-If using ScheduleExpression from Java EE, this should be provided as a runtime dependency.
-
-**Current development**
-
-*We are currently working to update the codebase towards JDK 16, to ensure will be fully compatible with JDK 17 when released.* 
-
-Now we are developing a new generation of cron-descriptors using neural-translation! Any kind of contributions are welcome: from help with dataset generation to machine learning models training and utilities to load them! If interested, please follow issue [#3](https://github.com/jmrozanec/cron-utils/issues/3)
+Build and test from a checkout with `go build ./...` and `go test ./...`.
 
 **Features**
 
@@ -37,13 +25,14 @@ Now we are developing a new generation of cron-descriptors using neural-translat
  * Supports cron extensions / nicknames: @yearly, @annually, @monthly, @weekly, @daily, @midnight, @hourly, @reboot
  * Print to locale specific human readable format (Chinese, English, German, Greek, Indonesian, Japanese, Korean, Polish, Romanian, Spanish, Swahili, and Turkish are fully supported. Dutch, French, Italian, Portuguese and Russian have basic support).
  * Parse and Description process are decoupled: parse once and operate with the result!
- * Build cron expressions using CronBuilder: 
+ * Build cron expressions using the builder package: 
     * no need to remember fields and constraints for each cron provider.
     * crons become decoupled from cron provider: anytime you can export to another format.
  * Check if cron expressions are equivalent.
  * Squash multiple cron expressions into a single one!
  * Validate if cron string expressions match a cron definition.
- * Convert crons between different cron definitions: if you need to migrate expressions, CronMapper may help you!
+ * A `cron-utils` command line parses, validates, describes, maps and schedules expressions.
+ * Convert crons between different cron definitions: if you need to migrate expressions, the mapper package may help you!
  * Pre-defined definitions for the following cron libraries are provided:
     * [Unix](https://www.unix.com/man-page/linux/5/crontab/)
     * [Cron4j](https://www.sauronsoftware.it/projects/cron4j/)
@@ -52,7 +41,7 @@ Now we are developing a new generation of cron-descriptors using neural-translat
  * Obtain last/next execution time as well as time from last execution/time to next execution.
  * Compute the number of executions between two days, and compare crons based on their execution frequencies.
  * Obtain weekdays count between two dates, considering different weekend policies as well as holidays.
- * Need to map constants between different cron/time libraries? Use ConstantsMapper.
+ * Need to map constants between different cron/time libraries? Use mapper.WeekDayMapping.
 
 **Usage Examples**
 
@@ -60,143 +49,116 @@ Below we present some examples. You can find this and others in a [sample repo w
 
 ***Build cron definitions***
 
-```java
+```go
 // Define your own cron: arbitrary fields are allowed and last field can be optional
-CronDefinition cronDefinition =
-    CronDefinitionBuilder.defineCron()
-        .withSeconds().and()
-        .withMinutes().and()
-        .withHours().and()
-        .withDayOfMonth()
-            .supportsHash().supportsL().supportsW().and()
-        .withMonth().and()
-        .withDayOfWeek()
-            .withIntMapping(7, 0) //we support non-standard non-zero-based numbers!
-            .supportsHash().supportsL().supportsW().and()
-        .withYear().optional().and()
-        .instance();
+cronDefinition, err := model.DefineCron().
+	WithSeconds().And().
+	WithMinutes().And().
+	WithHours().And().
+	WithDayOfMonth().SupportsHash().SupportsL().SupportsW().And().
+	WithMonth().And().
+	WithDayOfWeek().
+	WithIntMapping(7, 0). // we support non-standard non-zero-based numbers!
+	SupportsHash().SupportsL().SupportsW().And().
+	WithYear().Optional().And().
+	Instance()
 
 // or get a predefined instance
-cronDefinition = CronDefinitionBuilder.instanceDefinitionFor(QUARTZ);
+cronDefinition = model.InstanceDefinitionFor(model.Quartz)
 ```
 
 ***Build a cron expression***
-```java 
-// Create a cron expression. CronMigrator will ensure you remain cron provider agnostic
-import static com.cronutils.model.field.expression.FieldExpressionFactory.*;
-
-Cron cron = CronBuilder.cron(CronDefinitionBuilder.instanceDefinitionFor(CronType.QUARTZ))
-    .withYear(always())
-    .withDoM(between(SpecialChar.L, 3))
-    .withMonth(always())
-    .withDoW(questionMark())
-    .withHour(always())
-    .withMinute(always())
-    .withSecond(on(0))
-    .instance();
+```go
+// Create a cron expression. The builder ensures you remain cron provider agnostic
+cron, err := builder.Cron(model.InstanceDefinitionFor(model.Quartz)).
+	WithYear(model.AlwaysExpression()).
+	WithDoM(model.NewBetween(model.SpecialCharFieldValue(model.L), model.IntegerFieldValue(3))).
+	WithMonth(model.AlwaysExpression()).
+	WithDoW(model.QuestionMarkExpression()).
+	WithHour(model.AlwaysExpression()).
+	WithMinute(model.AlwaysExpression()).
+	WithSecond(model.NewOn(0)).
+	Instance()
 // Obtain the string expression
-String cronAsString = cron.asString(); // 0 * * L-3 * ? *
+cronAsString := cron.AsString() // 0 * * L-3 * ? *
 ```
 
 ***Parse***
-```java
+```go
 // Create a parser based on provided definition
-CronParser parser = new CronParser(cronDefinition);
-Cron quartzCron = parser.parse("0 23 * ? * 1-5 *");
+p := parser.New(cronDefinition)
+quartzCron, err := p.Parse("0 23 * ? * 1-5 *")
 ```
 
 ... even multi-cron expressions! How about squashing multiple crons into a single line? Instead of writing ```0 0 9 * * ? *```, ```0 0 10 * * ? *```, ```0 30 11 * * ? *``` and ```0 0 12 * * ? *``` we can wrap it into ```0 0|0|30|0 9|10|11|12 * * ? *```
 
 
 ***Describe***
-```java
-// Create a descriptor for a specific Locale
-CronDescriptor descriptor = CronDescriptor.instance(Locale.UK);
+```go
+// Create a descriptor for a specific locale (a BCP 47 language tag)
+d, err := descriptor.InstanceFor("en-GB")
 
 // Parse some expression and ask descriptor for description
-String description = descriptor.describe(parser.parse("*/45 * * * * ?"));
+cron, err := p.Parse("*/45 * * * * ?")
+description, err := d.Describe(cron)
 // Description will be: "every 45 seconds"
 
-description = descriptor.describe(quartzCron);
+description, err = d.Describe(quartzCron)
 // Description will be: "every hour at minute 23 every day between Monday and Friday"
-// which is the same description we get for the cron below:
-descriptor.describe(parser.parse("0 23 * ? * MON-FRI *"));
+// which is the same description we get for "0 23 * ? * MON-FRI *"
 ```
 
 ***Migrate***
-```java
+```go
 // Migration between cron libraries has never been so easy!
-// Turn cron expressions into another format by using CronMapper:
-CronMapper cronMapper = CronMapper.fromQuartzToCron4j();
-
-Cron cron4jCron = cronMapper.map(quartzCron);
-// and to get a String representation of it, we can use
-cron4jCron.asString();//will return: 23 * * * 1-5
+// Turn cron expressions into another format by using a mapper:
+cron4jCron, err := mapper.FromQuartzToCron4j().Map(quartzCron)
+// and to get a string representation of it, we can use
+cron4jCron.AsString() // will return: 23 * * * 1-5
 ```
 
 ***Validate***
-```java
-cron4jCron.validate()
+```go
+err := cron4jCron.Validate()
 ```
 
 ***Calculate time from/to execution***
-```java
+```go
+// Execution times are zoned date-times: javatime.FromTime places a time.Time in a zone
+zone, err := javatime.ZoneOf("Europe/Paris")
+now := javatime.FromTime(time.Now(), zone)
+et, err := executiontime.ForCron(cron)
+
 // Get date for last execution
-ZonedDateTime now = ZonedDateTime.now();
-ExecutionTime executionTime = ExecutionTime.forCron(parser.parse("* * * * * ? *"));
-ZonedDateTime lastExecution = executionTime.lastExecution(now);
+lastExecution, ok, err := et.LastExecution(now)
 
 // Get date for next execution
-ZonedDateTime nextExecution = executionTime.nextExecution(now);
+nextExecution, ok, err := et.NextExecution(now)
 
 // Time from last execution
-Duration timeFromLastExecution = executionTime.timeFromLastExecution(now);
+timeFromLastExecution, ok, err := et.TimeFromLastExecution(now)
 
 // Time to next execution
-Duration timeToNextExecution = executionTime.timeToNextExecution(now);
+timeToNextExecution, ok, err := et.TimeToNextExecution(now)
 ```
 
 ***Map constants between libraries***
-```java
-// Map day of week value from Quartz to JodaTime
-int jodatimeDayOfWeek =
-        ConstantsMapper.weekDayMapping(
-                ConstantsMapper.QUARTZ_WEEK_DAY,
-                ConstantsMapper.JODATIME_WEEK_DAY
-        );
-```
-***Date and time formatting for humans!***
-
-Use [htime](https://github.com/jmrozanec/htime) - Human readable datetime formatting for Java!
-Despite this functionality is not bundled in the same jar, is a cron-utils project you may find useful.
-```java
-// You no longer need to remember "YYYY-MM-dd KK a" patterns.
-DateTimeFormatter formatter = 
-	    HDateTimeFormatBuilder
-		    .getInstance()
-		    .forJodaTime()
-		    .getFormatter(Locale.US)
-		    .forPattern("June 9, 2011");
-String formattedDateTime = formatter.print(lastExecution);
-// formattedDateTime will be lastExecution in "dayOfWeek, Month day, Year" format
+```go
+// Map day of week value from Quartz to the ISO numbering (Monday is 1)
+isoDayOfWeek := mapper.WeekDayMapping(mapper.QuartzWeekDay, mapper.Java8WeekDay, 2)
 ```
 
 ***cron-utils CLI***
 
-We provide a simple CLI interface to use cron-utils right from console, without writing a new project! The CLI is a satellite project, available at [cron-utils-cli](https://github.com/jmrozanec/cron-utils-cli)
+The `cron-utils` command gives the library's features on the command line:
 
-- Usage: `java -jar cron-utils.jar com.cronutils.cli.CronUtilsCLI --validate -f [CRON4J|QUARTZ|UNIX] -e '<cron expression>'`
+    go build -o cron-utils ./cmd/cron-utils
+    cron-utils parse --type quartz -- '0 23 * ? * 1-5 *'
+    cron-utils describe --type unix --locale de -- '0 12 * * MON-FRI'
+    cron-utils next --type quartz --zone Europe/Paris --at 2024-03-30T12:00 --count 3 -- '0 30 2 * * ?'
+    cron-utils map --from quartz --to unix -- '0 23 * ? * 1-5 *'
 
-- Example: `java -jar cron-utils.jar com.cronutils.cli.CronUtilsCLI --validate -f UNIX -e '* 1 * * *'`
-
-If you want a standalone jar without requiring the 'cp', build an uber jar with :
-```bash
-mvn assembly:assembly -DdescriptorId=jar-with-dependencies
-```
-Then, launch cli-utils (built in the `target` directory) with :
-```bash
-java -jar cron-utils-<version>-jar-with-dependencies.jar com.cronutils.cli.CronUtilsCLI --validate -f [CRON4J|QUARTZ|UNIX] -e '<cron expression>'`
-```
+See the command's documentation (`go doc ./cmd/cron-utils`) for every command and option.
 
 **Contribute & Support!**
 
@@ -219,6 +181,5 @@ Check [our page](https://cronutils.com)! For stats about the project, you can vi
 You are welcome to visit and use the following cron-utils projects:
  * [htime](https://github.com/jmrozanec/htime): A Java library to make it easy for humans format a date. You no longer need to remember date time formatting chars: just write an example, and you will get the appropriate formatter.
  * [cron-utils-spring](https://github.com/jmrozanec/cron-utils-spring): A Java library to describe cron expressions in human readable language at Spring framework, using cron-utils.
- * [cron-utils-cli](https://github.com/jmrozanec/cron-utils-cli): cron-utils features made available through a CLI.
  * [cron-utils-sisyphus](https://github.com/jmrozanec/cron-utils-sisyphus): A Scala scheduler that supports multiple cron notations.
  * [cron-utils-scheduler](https://github.com/jmrozanec/cron-utils-scheduler): A Java job scheduler based on cron-utils library.
